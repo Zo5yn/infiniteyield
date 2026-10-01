@@ -9246,11 +9246,13 @@ addcmd("replicationlag", {"backtrack"}, function(args, speaker)
 end)
 
 addcmd("noprompts", {"nopurchaseprompts"}, function(args, speaker)
-	COREGUI.PurchasePromptApp.Enabled = false
+	COREGUI.FoundationOverlay.SafeAreaFrame
+.Enabled = false
 end)
 
 addcmd("showprompts", {"showpurchaseprompts"}, function(args, speaker)
-	COREGUI.PurchasePromptApp.Enabled = true
+	COREGUI.FoundationOverlay.SafeAreaFrame
+.Enabled = true
 end)
 
 promptNewRig = function(speaker, rig)
