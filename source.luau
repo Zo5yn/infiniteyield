@@ -68,6 +68,7 @@ Players = Services.Players
 UserInputService = Services.UserInputService
 TweenService = Services.TweenService
 HttpService = Services.HttpService
+ExperienceService = Services.ExperienceService
 MarketplaceService = Services.MarketplaceService
 RunService = Services.RunService
 TeleportService = Services.TeleportService
@@ -4529,7 +4530,8 @@ CMDs[#CMDs + 1] = {NAME = 'audiologger / alogger', DESC = 'Opens Edges audio log
 CMDs[#CMDs + 1] = {NAME = 'serverinfo / info', DESC = 'Gives you info about the server'}
 CMDs[#CMDs + 1] = {NAME = 'jobid', DESC = 'Copies the games JobId to your clipboard'}
 CMDs[#CMDs + 1] = {NAME = 'notifyjobid', DESC = 'Notifies you the games JobId'}
-CMDs[#CMDs + 1] = {NAME = 'rejoin / rj', DESC = 'Makes you rejoin the game'}
+CMDs[#CMDs + 1] = {NAME = 'rejoin / rj [reposition]', DESC = 'Makes you rejoin the game'}
+CMDs[#CMDs + 1] = {NAME = 'inviteprompt', DESC = 'Prompts the user of your choice that they had invited you. Requires a rejoin to function.'}
 CMDs[#CMDs + 1] = {NAME = 'autorejoin / autorj', DESC = 'Automatically rejoins the server if you get kicked/disconnected'}
 CMDs[#CMDs + 1] = {NAME = 'serverhop / shop', DESC = 'Teleports you to a different server'}
 CMDs[#CMDs + 1] = {NAME = 'gameteleport / gametp [place ID]', DESC = 'Joins a game by ID'}
@@ -4579,7 +4581,7 @@ CMDs[#CMDs + 1] = {NAME = 'alignmentkeys', DESC = 'Enables the left and right al
 CMDs[#CMDs + 1] = {NAME = 'unalignmentkeys / noalignmentkeys', DESC = 'Disables the alignment keys'}
 CMDs[#CMDs + 1] = {NAME = 'ctrllock', DESC = 'Binds Shiftlock to LeftControl'}
 CMDs[#CMDs + 1] = {NAME = 'unctrllock', DESC = 'Re-binds Shiftlock to LeftShift'}
-CMDs[#CMDs + 1] = {NAME = 'exit', DESC = 'Kills roblox process'}
+CMDs[#CMDs + 1] = {NAME = 'exit / shutdown / leave', DESC = 'Exits the game'}
 CMDs[#CMDs + 1] = {NAME = 'removecmd / deletecmd', DESC = 'Removes a command until the script is reloaded'}
 CMDs[#CMDs + 1] = {NAME = 'breakloops / break (cmd loops)', DESC = 'Stops any cmd loops (;100^1^cmd)'}
 CMDs[#CMDs + 1] = {NAME = '', DESC = ''}
@@ -4616,7 +4618,7 @@ CMDs[#CMDs + 1] = {NAME = 'deletewaypoint / dwp [name]', DESC = 'Deletes a waypo
 CMDs[#CMDs + 1] = {NAME = 'clearwaypoints / cwp', DESC = 'Clears all waypoints'}
 CMDs[#CMDs + 1] = {NAME = 'cleargamewaypoints / cgamewp', DESC = 'Clears all waypoints for the game you are in'}
 CMDs[#CMDs + 1] = {NAME = '', DESC = ''}
-CMDs[#CMDs + 1] = {NAME = 'goto [player] [X] [Y] [Z]', DESC = 'Go to a player'}
+CMDs[#CMDs + 1] = {NAME = 'goto [player] [request stream]', DESC = 'Go to a player'}
 CMDs[#CMDs + 1] = {NAME = 'tweengoto / tgoto [player]', DESC = 'Tween to a player (bypasses some anti cheats)'}
 CMDs[#CMDs + 1] = {NAME = 'tweenspeed / tspeed [num]', DESC = 'Sets how fast all tween commands go (default is 1)'}
 CMDs[#CMDs + 1] = {NAME = 'vehiclegoto / vgoto [player]', DESC = 'Go to a player while in a vehicle'}
@@ -5118,12 +5120,12 @@ end)
 onDied()
 
 local booly = {
-    truthy = { ["true"] = true, ["t"] = true, ["1"] = true, yes = true, y = true, on = true, enable = true, enabled = true },
-    falsy = { ["false"] = true, ["f"] = true, ["0"] = true, no = true, n = true, off = true, disable = true, disabled = true }
+    truthy = { ["true"] = true, ["t"] = true, ["1"] = true, ["yes"] = true, ["y"] = true, ["on"] = true, ["enable"] = true, ["enabled"] = true },
+    falsy = { ["false"] = true, ["f"] = true, ["0"] = true, ["no"] = true, ["n"] = true, ["off"] = true, ["disable"] = true, ["disabled"] = true },
 }
 
 function parseBoolean(raw, default)
-    raw = tostring(raw)
+    raw = tostring(raw):lower()
     if booly.truthy[raw] then return true end
     if booly.falsy[raw] then return false end
     return default or false
@@ -6998,13 +7000,54 @@ addcmd('gametp',{'gameteleport'},function(args, speaker)
 	TeleportService:Teleport(args[1])
 end)
 
-addcmd("rejoin", {"rj"}, function(args, speaker)
+teleportRespawnHandler = [[
+	local ok, data = pcall(function() return game:GetService("TeleportService"):GetLocalPlayerTeleportData() end)
+	if ok and typeof(data) == "CFrame" then
+		local Players = game:GetService("Players")
+		local ME = Players.LocalPlayer
+		while not ME do
+			Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
+			ME = Players.LocalPlayer
+		end
+
+		local Character = ME.Character or ME.CharacterAdded:Wait()
+		Character:WaitForChild("HumanoidRootPart")
+
+		local t = tick()
+		while (tick() - t) <= 0.3 do
+			Character:PivotTo(data)
+			task.wait()
+		end
+	end
+]]
+addcmd("rejoin", { "rj" }, function(args, speaker)
+	local data = nil
+	if parseBoolean(args[1], false) == true then
+		if queueteleport then
+			if speaker.Character then data = speaker.Character:GetPivot() end
+			queueteleport(teleportRespawnHandler)
+		else
+			notify("Incompatible Exploit", "Your exploit does not support this argument (missing queue_on_teleport)")
+		end
+	end
+
 	if #Players:GetPlayers() <= 1 then
 		Players.LocalPlayer:Kick("\nRejoining...")
-		wait()
-		TeleportService:Teleport(PlaceId, Players.LocalPlayer)
+		task.wait(0.3)
+		TeleportService:Teleport(PlaceId, Players.LocalPlayer, data)
 	else
-		TeleportService:TeleportToPlaceInstance(PlaceId, JobId, Players.LocalPlayer)
+		TeleportService:TeleportToPlaceInstance(PlaceId, JobId, Players.LocalPlayer, nil, data)
+	end
+end)
+
+addcmd("inviteprompt", {}, function(args, speaker)
+	local plrs = getPlayer(args[1], speaker)
+	if #plrs > 0 then
+		ExperienceService:LaunchExperience({
+			placeId = PlaceId,
+			gameInstanceId = JobId,
+			referredByPlayerId = plr[1].UserId
+		})
 	end
 end)
 
@@ -7036,7 +7079,7 @@ addcmd("serverhop", {"shop"}, function(args, speaker)
 	end
 end)
 
-addcmd("exit", {}, function(args, speaker)
+addcmd("exit", {"shutdown", "leave"}, function(args, speaker)
 	game:Shutdown()
 end)
 
@@ -8584,7 +8627,6 @@ addcmd('unview',{'unspectate'},function(args, speaker)
 	workspace.CurrentCamera.CameraSubject = speaker.Character
 end)
 
-
 fcRunning = false
 local Camera = workspace.CurrentCamera
 workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
@@ -9373,23 +9415,31 @@ addcmd('un2022materials',{'unuse2022materials'},function(args, speaker)
 end)
 
 addcmd("goto", {"to"}, function(args, speaker)
-    local character = speaker and speaker.Character
-    local humanoid = character and character:FindFirstChildWhichIsA("Humanoid")
-    local players = getPlayer(args[1], speaker)
-    for _, v in pairs(players) do
-        if Players[v].Character ~= nil then
-            if humanoid and humanoid.SeatPart then
-                humanoid.Sit = false
-                task.wait(0.1)
-            end
-			if args[2] and args[3] and args[4] then
-            	getRoot(speaker.Character).CFrame = getRoot(Players[v].Character):GetPivot() + Vector3.new(args[2], args[3], args[4])
-			else
-				getRoot(speaker.Character).CFrame = getRoot(Players[v].Character):GetPivot()
+	local character = speaker and speaker.Character
+	local humanoid = character and character:FindFirstChildWhichIsA("Humanoid")
+	if humanoid == nil then return end
+
+	if humanoid and humanoid.SeatPart then
+		humanoid.Sit = false
+		task.wait(0.1)
+	end
+
+	local waitForStream = parseBoolean(args[2], false)
+	for _, name in getPlayer(args[1], speaker) do
+		local targetCharacter = Players[name].Character
+		if targetCharacter ~= nil then
+			local targetPivot = targetCharacter:GetPivot()
+			local targetPosition = targetPivot.Position
+
+			if waitForStream and workspace.StreamingEnabled then
+				task.spawn(speaker.RequestStreamAroundAsync, speaker, targetPosition, 5)
+				targetCharacter:WaitForChild("HumanoidRootPart", 5)
 			end
-        end
-    end
-    execCmd("breakvelocity")
+
+			speaker.Character:PivotTo(CFrame.new(targetPosition + (targetPivot.LookVector * 3), targetPosition))
+			breakVelocity()
+		end
+	end
 end)
 
 addcmd("tweengoto", {"tgoto", "tto", "tweento"}, function(args, speaker)
@@ -9418,27 +9468,27 @@ addcmd("tweengoto", {"tgoto", "tto", "tweento"}, function(args, speaker)
     end
 end)
 
-addcmd('vehiclegoto', { 'vgoto', 'vtp', 'vehicletp' }, function(args, speaker)
-	local character = speaker.Character
-	local humanoid = if character then character:FindFirstChildOfClass('Humanoid') else nil
-	if not humanoid then return end
+addcmd("vehiclegoto", {"vgoto", "vtp", "vehicletp"}, function(args, speaker)
+    local character = speaker.Character
+    local humanoid = if character then character:FindFirstChildOfClass("Humanoid") else nil
+    if not humanoid then return end
 
-	local seat = humanoid.SeatPart
-	local vehicleModel = if seat then seat:FindFirstAncestorWhichIsA('Model') else nil
-	if vehicleModel == nil then
-		notify('Vehicle Goto', 'Make sure you\'re sitting in a vehicle.')
-		return
-	end
+    local seat = humanoid.SeatPart
+    local vehicleModel = if seat then seat:FindFirstAncestorWhichIsA("Model") else nil
+    if vehicleModel == nil then
+        notify("Vehicle Goto", "Make sure you're sitting in a vehicle.")
+        return
+    end
 
-	for _, v in getPlayer(args[1], speaker) do
-		if Players[v].Character == nil then continue end
+    for _, v in getPlayer(args[1], speaker) do
+        if Players[v].Character == nil then continue end
 
-		local root = getRoot(Players[v].Character)
-		if root == nil then continue end
+        local root = getRoot(Players[v].Character)
+        if root == nil then continue end
 
-		vehicleModel:PivotTo(root.Position)
-		-- break -- uncomment this if you want to teleport to the first valid player instead of last
-	end
+        vehicleModel:PivotTo(root:GetPivot())
+        break
+    end
 end)
 
 addcmd('pulsetp',{'ptp'},function(args, speaker)
@@ -10884,7 +10934,7 @@ addcmd("explorer", {"dex"}, function(args, speaker)
 	loadstring(game:HttpGet("https://raw.githubusercontent.com/infyiff/backup/main/dex.lua"))()
 end)
 
-addcmd("explorerplusplus", {"dexplusplus", "dexpp", "dexplusplus", "cdexplusplus", "cdexpp", "explorerpp"}, function(args, speaker)
+addcmd("explorerplusplus", {"dexplusplus", "dexpp", "explorerpp"}, function(args, speaker)
 	notify("Loading", "Hold on a sec")
 	loadstring(game:HttpGet("https://github.com/AZYsGithub/DexPlusPlus/releases/latest/download/out.lua"))()
 end)
@@ -10898,17 +10948,17 @@ addcmd("bundledecompiler", {}, function(args, speaker)
 	end
 end)
 
-addcmd('remotespy',{'rspy'},function(args, speaker)
+addcmd('simplespy',{'sspy'},function(args, speaker)
 	notify("Loading",'Hold on a sec')
 	-- Full credit to exx, creator of SimpleSpy
 	-- also thanks to Amity for fixing
 	loadstring(game:HttpGet("https://raw.githubusercontent.com/infyiff/backup/main/SimpleSpyV3/main.lua"))()
 end)
 
-addcmd('cobalt',{'cobalt', 'rspy', 'remotespy'},function(args, speaker)
+addcmd("remotespy", {"rspy", "cobalt", "cspy"}, function(args, speaker)
 	notify("Loading",'Hold on a sec')
-	-- Full credit to Notpoiu, creator of Cobalt
-	loadstring(game:HttpGet("https://github.com/notpoiu/cobalt/releases/latest/download/Cobalt.luau"))()
+	-- Full credit to notpoiu, creator of Cobalt
+	loadstring(game:HttpGet("https://gitlab.com/upio/cobalt/-/releases/permalink/latest/downloads/Cobalt.luau"))()
 end)
 
 addcmd('audiologger',{'alogger'},function(args, speaker)
