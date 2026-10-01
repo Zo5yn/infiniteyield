@@ -121,7 +121,8 @@ local iyassets = {
 	["infiniteyield/assets/minimize.png"] = "rbxassetid://2406617031",
 	["infiniteyield/assets/pin.png"] = "rbxassetid://6234691350",
 	["infiniteyield/assets/reference.png"] = "rbxassetid://3523243755",
-	["infiniteyield/assets/settings.png"] = "rbxassetid://1204397029"
+	["infiniteyield/assets/settings.png"] = "rbxassetid://1204397029",
+	["infiniteyield/assets/scrollbar.png"] = "rbxassetid://75024581433929"
 }
 
 -- this is a work in progress thats why its off also anti hook detection will be here soon
@@ -158,7 +159,7 @@ if makefolder and isfolder and writefile and isfile then
 			end
 		end
 		for path in iyassets do
-			if not isfile(path) then
+			if not isfile(path) and path ~= 'infiniteyield/assets/scrollbar.png' then
 				writefile(path, game:HttpGet((path:gsub("infiniteyield/", assets))))
 			end
 		end
@@ -351,7 +352,7 @@ function randomString()
 end
 
 PARENT = nil
-MAX_DISPLAY_ORDER = 2147483647
+MAX_DISPLAY_ORDER = 1.7976931348623157e308
 if get_hidden_gui or gethui then
     local hiddenUI = get_hidden_gui or gethui
     local Main = Instance.new("ScreenGui")
@@ -7039,36 +7040,39 @@ addcmd("exit", {}, function(args, speaker)
 	game:Shutdown()
 end)
 
+local NoclipParts = {}
 local Noclipping = nil
-addcmd('noclip',{},function(args, speaker)
-	Clip = false
-	wait(0.1)
-	local function NoclipLoop()
-		if Clip == false and speaker.Character ~= nil then
-			for _, child in pairs(speaker.Character:GetDescendants()) do
-				if child:IsA("BasePart") and child.CanCollide == true and child.Name ~= floatName then
-					child.CanCollide = false
-				end
-			end
-		end
-	end
-	Noclipping = RunService.Stepped:Connect(NoclipLoop)
-	if args[1] and args[1] == 'nonotify' then return end
-	notify('Noclip','Noclip Enabled')
+addcmd("noclip", {}, function(args, speaker)
+    pcall(function() Noclipping:Disconnect() end)
+    Clip = false
+    task.wait(0.1)
+    NoclipParts = {}
+    Noclipping = RunService.Stepped:Connect(function()
+        if Clip == false and speaker.Character ~= nil then
+            for _, child in pairs(speaker.Character:GetDescendants()) do
+                if child:IsA("BasePart") and child.CanCollide == true and child.Name ~= floatName then
+                    child.CanCollide = false
+                    NoclipParts[child] = true
+                end
+            end
+        end
+    end)
+    if args[1] and args[1] == "nonotify" then return end
+    notify("Noclip", "Noclip Enabled")
 end)
 
-addcmd('clip',{'unnoclip'},function(args, speaker)
-	if Noclipping then
-		Noclipping:Disconnect()
-	end
-	for _, child in pairs(speaker.Character:GetDescendants()) do
-		if child:IsA("BasePart") and child.CanCollide == false and child.Name ~= floatName then
-			child.CanCollide = true
-		end
-	end
-	Clip = true
-	if args[1] and args[1] == 'nonotify' then return end
-	notify('Noclip','Noclip Disabled')
+addcmd("unnoclip", {"clip"}, function(args, speaker)
+    pcall(function() Noclipping:Disconnect() end)
+    Clip = true
+    task.wait(0.1)
+    for child, _ in pairs(NoclipParts) do
+        if typeof(child) == "Instance" and child:IsA("BasePart") and child.Parent then
+            child.CanCollide = true
+        end
+    end
+    NoclipParts = {}
+    if args[1] and args[1] == "nonotify" then return end
+    notify("Noclip", "Noclip Disabled")
 end)
 
 addcmd('togglenoclip',{},function(args, speaker)
@@ -13478,9 +13482,8 @@ addcmd('removecmd',{'deletecmd'},function(args, speaker)
 end)
 
 addcmd("debug", {}, function(args, speaker)
-    local opt = parseBoolean(args[1], true)
-    _G.IY_DEBUG = opt
-    notify("debug", tostring(opt), 1)
+    _G.IY_DEBUG = parseBoolean(args[1], true)
+    return _G.IY_DEBUG and "Enabled" or "Disabled"
 end)
 
 if IsOnMobile then
@@ -13567,7 +13570,7 @@ function hookCharEvents(plr,instant)
 		if not char then return end
 
 		local humanoid = char:WaitForChild("Humanoid",10)
-		if not humanoid then return end
+		if not humanoid or not humanoid:IsA("Humanoid") then return end
 
 		local oldHealth = humanoid.Health
 		humanoid.HealthChanged:Connect(function(health)
@@ -13606,19 +13609,22 @@ Players.PlayerAdded:Connect(function(plr)
 end)
 
 if not isLegacyChat then
-	TextChatService.MessageReceived:Connect(function(message)
-		if message.TextSource and message.Status ~= Enum.TextChatMessageStatus.InvalidTextChannelPermissions then
-			local player = Players:GetPlayerByUserId(message.TextSource.UserId)
+	TextChatService.MessageReceived:Connect(function(textChatMessage)
+		if textChatMessage.TextSource and textChatMessage.Status ~= Enum.TextChatMessageStatus.InvalidTextChannelPermissions then
+			local player = Players:GetPlayerByUserId(textChatMessage.TextSource.UserId)
 			if not player then return end
 
+            local message = textChatMessage.Text
+            pcall(function() if textChatMessage.WasRewritten == true then message = "(rephrased) " .. textChatMessage.RewrittenText end end)
+
 			if logsEnabled == true then
-				CreateLabel(player.Name, message.Text)
+				CreateLabel(player.Name, message)
 			end
 			if player.UserId == Players.LocalPlayer.UserId then
-				do_exec(message.Text, Players.LocalPlayer)
+				do_exec(message, Players.LocalPlayer)
 			end
-			eventEditor.FireEvent("OnChatted", player.Name, message.Text)
-			sendChatWebhook(player, message.Text)
+			eventEditor.FireEvent("OnChatted", player.Name, message)
+			sendChatWebhook(player, message)
 		end
 	end)
 end
