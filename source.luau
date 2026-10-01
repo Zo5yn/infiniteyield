@@ -9418,14 +9418,26 @@ addcmd("tweengoto", {"tgoto", "tto", "tweento"}, function(args, speaker)
     end
 end)
 
-addcmd('vehiclegoto',{'vgoto','vtp','vehicletp'},function(args, speaker)
-	local players = getPlayer(args[1], speaker)
-	for i,v in pairs(players)do
-		if Players[v].Character ~= nil then
-			local seat = speaker.Character:FindFirstChildOfClass('Humanoid').SeatPart
-			local vehicleModel = seat:FindFirstAncestorWhichIsA("Model")
-			vehicleModel:MoveTo(getRoot(Players[v].Character).Position)
-		end
+addcmd('vehiclegoto', { 'vgoto', 'vtp', 'vehicletp' }, function(args, speaker)
+	local character = speaker.Character
+	local humanoid = if character then character:FindFirstChildOfClass('Humanoid') else nil
+	if not humanoid then return end
+
+	local seat = humanoid.SeatPart
+	local vehicleModel = if seat then seat:FindFirstAncestorWhichIsA('Model') else nil
+	if vehicleModel == nil then
+		notify('Vehicle Goto', 'Make sure you\'re sitting in a vehicle.')
+		return
+	end
+
+	for _, v in getPlayer(args[1], speaker) do
+		if Players[v].Character == nil then continue end
+
+		local root = getRoot(Players[v].Character)
+		if root == nil then continue end
+
+		vehicleModel:PivotTo(root.Position)
+		-- break -- uncomment this if you want to teleport to the first valid player instead of last
 	end
 end)
 
@@ -9665,26 +9677,31 @@ end)
 
 addcmd("orbit", {}, function(args, speaker)
 	execCmd("unorbit nonotify")
+
 	local target = Players:FindFirstChild(getPlayer(args[1], speaker)[1])
 	local root = getRoot(speaker.Character)
 	local humanoid = speaker.Character:FindFirstChildWhichIsA("Humanoid")
+
 	if target and target.Character and getRoot(target.Character) and root and humanoid then
 		local rotation = 0
 		local speed = tonumber(args[2]) or 0.2
 		local distance = tonumber(args[3]) or 6
-		orbit1 = RunService.Heartbeat:Connect(function()
-			pcall(function()
-				rotation = rotation + speed
-				root.CFrame = CFrame.new(getRoot(target.Character).Position) * CFrame.Angles(0, math.rad(rotation), 0) * CFrame.new(distance, 0, 0)
-			end)
+
+		orbit1 = RunService.Stepped:Connect(function()
+			breakVelocity()
+			rotation = rotation + speed
+
+			local targetRoot = getRoot(target.Character).Position
+			local orbitPosition = (CFrame.new(targetRoot) * CFrame.Angles(0, math.rad(rotation), 0) * CFrame.new(distance, 0, 0)).Position
+			root.CFrame = CFrame.lookAt(orbitPosition, Vector3.new(targetRoot.X, orbitPosition.Y, targetRoot.Z))
 		end)
-		orbit2 = RunService.RenderStepped:Connect(function()
-			pcall(function()
-				root.CFrame = CFrame.new(root.Position, getRoot(target.Character).Position)
-			end)
+
+		orbit2 = humanoid.Died:Connect(function() execCmd("unorbit") end)
+
+		orbit3 = humanoid.Seated:Connect(function(value)
+			if value then execCmd("unorbit") end
 		end)
-		orbit3 = humanoid.Died:Connect(function() execCmd("unorbit") end)
-		orbit4 = humanoid.Seated:Connect(function(value) if value then execCmd("unorbit") end end)
+
 		notify("Orbit", "Started orbiting " .. formatUsername(target))
 	end
 end)
@@ -9693,7 +9710,6 @@ addcmd("unorbit", {}, function(args, speaker)
 	if orbit1 then orbit1:Disconnect() end
 	if orbit2 then orbit2:Disconnect() end
 	if orbit3 then orbit3:Disconnect() end
-	if orbit4 then orbit4:Disconnect() end
 	if args[1] ~= "nonotify" then notify("Orbit", "Stopped orbiting player") end
 end)
 
@@ -9711,7 +9727,6 @@ addcmd('freeze',{'fr'},function(args, speaker)
 		end
 	end
 end)
-
 
 addcmd('thaw',{'unfreeze','unfr'},function(args, speaker)
 	local players = getPlayer(args[1], speaker)
@@ -12071,57 +12086,51 @@ end)
 flinging = false
 addcmd('fling',{},function(args, speaker)
 	flinging = false
-	for _, child in pairs(speaker.Character:GetDescendants()) do
+	for _, child in next, speaker.Character:GetDescendants() do
 		if child:IsA("BasePart") then
 			child.CustomPhysicalProperties = PhysicalProperties.new(100, 0.3, 0.5)
 		end
 	end
-	execCmd('noclip')
-	wait(.1)
+	execCmd('noclip nonotify')
+	task.wait(.1)
 	local bambam = Instance.new("BodyAngularVelocity")
 	bambam.Name = randomString()
 	bambam.Parent = getRoot(speaker.Character)
 	bambam.AngularVelocity = Vector3.new(0,99999,0)
 	bambam.MaxTorque = Vector3.new(0,math.huge,0)
 	bambam.P = math.huge
-	local Char = speaker.Character:GetChildren()
-	for i, v in next, Char do
+	for i, v in next, speaker.Character:GetChildren() do
 		if v:IsA("BasePart") then
-			v.CanCollide = false
 			v.Massless = true
-			v.Velocity = Vector3.new(0, 0, 0)
+			v.Velocity = Vector3.zero
 		end
 	end
 	flinging = true
-	local function flingDiedF()
+	flingDied = speaker.Character:FindFirstChildOfClass('Humanoid').Died:Connect(function()
 		execCmd('unfling')
-	end
-	flingDied = speaker.Character:FindFirstChildOfClass('Humanoid').Died:Connect(flingDiedF)
+	end)
 	repeat
 		bambam.AngularVelocity = Vector3.new(0,99999,0)
-		wait(.2)
+		task.wait(.2)
 		bambam.AngularVelocity = Vector3.new(0,0,0)
-		wait(.1)
+		task.wait(.1)
 	until flinging == false
 end)
 
 addcmd('unfling',{'nofling'},function(args, speaker)
-	execCmd('clip')
-	if flingDied then
-		flingDied:Disconnect()
-	end
+	execCmd('clip nonotify')
+	if flingDied then flingDied:Disconnect() end
 	flinging = false
-	wait(.1)
+	task.wait(.1)
 	local speakerChar = speaker.Character
 	if not speakerChar or not getRoot(speakerChar) then return end
-	for i,v in pairs(getRoot(speakerChar):GetChildren()) do
-		if v.ClassName == 'BodyAngularVelocity' then
+	for _, v in next, speakerChar:GetDescendants() do
+		if v:IsA("BasePart") then
+			v.CustomPhysicalProperties = PhysicalProperties.new(0.7, 0.3, 0.5)
+			v.Massless = false
+			v.Velocity = Vector3.zero
+		elseif v:IsA("BodyAngularVelocity") then
 			v:Destroy()
-		end
-	end
-	for _, child in pairs(speakerChar:GetDescendants()) do
-		if child.ClassName == "Part" or child.ClassName == "MeshPart" then
-			child.CustomPhysicalProperties = PhysicalProperties.new(0.7, 0.3, 0.5)
 		end
 	end
 end)
