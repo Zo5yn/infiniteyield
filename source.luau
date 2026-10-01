@@ -14,6 +14,9 @@ function missing(t, f, fallback)
 end
 
 cloneref = missing("function", cloneref, function(...) return ... end)
+gethui = missing("function", gethui or get_hidden_gui)
+syn = missing("table", syn)
+syn_protect_gui = missing("function", syn and syn.protect_gui)
 sethidden =  missing("function", sethiddenproperty or set_hidden_property or set_hidden_prop)
 gethidden =  missing("function", gethiddenproperty or get_hidden_property or get_hidden_prop)
 queueteleport =  missing("function", queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport))
@@ -44,7 +47,7 @@ setreadonly = missing("function", setreadonly or set_readonly, function(t, v) if
 hookmetamethod = missing("function", hookmetamethod, function(obj, meta, fn) if getrawmetatable and setreadonly then local mt = getrawmetatable(obj) setreadonly(mt, false) local old = mt[meta] mt[meta] = fn return old end end)
 getnamecallmethod = missing("function", getnamecallmethod or get_namecall_method)
 checkcaller = missing("function", checkcaller, function() return false end)
-newcclosure = missing("function", newcclosure)
+newcclosure = missing("function", newcclosure, function(f, ...) return f(...) end)
 getgc = missing("function", getgc or get_gc_objects)
 setthreadidentity = missing("function", setthreadidentity or (syn and syn.set_thread_identity) or syn_context_set or setthreadcontext)
 replicatesignal = missing("function", replicatesignal)
@@ -354,21 +357,20 @@ end
 
 PARENT = nil
 MAX_DISPLAY_ORDER = 1.7976931348623157e308
-if get_hidden_gui or gethui then
-    local hiddenUI = get_hidden_gui or gethui
+if gethui then
     local Main = Instance.new("ScreenGui")
     Main.Name = randomString()
     Main.ResetOnSpawn = false
     Main.DisplayOrder = MAX_DISPLAY_ORDER
-    Main.Parent = hiddenUI()
+    Main.Parent = gethui()
     PARENT = Main
-elseif (not is_sirhurt_closure) and (syn and syn.protect_gui) then
+elseif (not is_sirhurt_closure) and syn_protect_gui then
     local Main = Instance.new("ScreenGui")
     Main.Name = randomString()
     Main.ResetOnSpawn = false
     Main.DisplayOrder = MAX_DISPLAY_ORDER
-    syn.protect_gui(Main)
-    Main.Parent = COREGUI
+    syn_protect_gui(Main)
+	Main.Parent = COREGUI
     PARENT = Main
 elseif COREGUI:FindFirstChild("RobloxGui") then
     PARENT = COREGUI.RobloxGui
@@ -3386,60 +3388,57 @@ function CreateLabel(Name, Text)
 	end
 end
 
-function CreateJoinLabel(plr,ID)
-	if #scroll_3:GetChildren() >= 2546 then
-		scroll_3:ClearAllChildren()
-	end
-	local infoFrame = Instance.new("Frame")
-	local info1 = Instance.new("TextLabel")
-	local info2 = Instance.new("TextLabel")
-	local ImageLabel_3 = Instance.new("ImageLabel")
-	infoFrame.Name = randomString()
-	infoFrame.Parent = scroll_3
-	infoFrame.BackgroundColor3 = Color3.new(1, 1, 1)
-	infoFrame.BackgroundTransparency = 1
-	infoFrame.BorderColor3 = Color3.new(0.105882, 0.164706, 0.207843)
-	infoFrame.Size = UDim2.new(1, 0, 0, 50)
-	info1.Name = randomString()
-	info1.Parent = infoFrame
-	info1.BackgroundTransparency = 1
-	info1.BorderSizePixel = 0
-	info1.Position = UDim2.new(0, 45, 0, 0)
-	info1.Size = UDim2.new(0, 135, 1, 0)
-	info1.ZIndex = 10
-	info1.Font = Enum.Font.SourceSans
-	info1.FontSize = Enum.FontSize.Size14
-	info1.Text = "Username: "..plr.Name.."\nJoined Server: "..Time()
-	info1.TextColor3 = Color3.new(1, 1, 1)
-	info1.TextWrapped = true
-	info1.TextXAlignment = Enum.TextXAlignment.Left
-	info2.Name = randomString()
-	info2.Parent = infoFrame
-	info2.BackgroundTransparency = 1
-	info2.BorderSizePixel = 0
-	info2.Position = UDim2.new(0, 185, 0, 0)
-	info2.Size = UDim2.new(0, 140, 1, -5)
-	info2.ZIndex = 10
-	info2.Font = Enum.Font.SourceSans
-	info2.FontSize = Enum.FontSize.Size14
-	info2.Text = "User ID: "..ID.."\nAccount Age: "..plr.AccountAge.."\nJoined Roblox: Loading..."
-	info2.TextColor3 = Color3.new(1, 1, 1)
-	info2.TextWrapped = true
-	info2.TextXAlignment = Enum.TextXAlignment.Left
-	info2.TextYAlignment = Enum.TextYAlignment.Center
-	ImageLabel_3.Parent = infoFrame
-	ImageLabel_3.BackgroundTransparency = 1
-	ImageLabel_3.BorderSizePixel = 0
-	ImageLabel_3.Size = UDim2.new(0, 45, 1, 0)
-	ImageLabel_3.Image = Players:GetUserThumbnailAsync(ID, Enum.ThumbnailType.AvatarThumbnail, Enum.ThumbnailSize.Size420x420)
-	scroll_3.CanvasSize = UDim2.new(0, 0, 0, listlayout.AbsoluteContentSize.Y)
-	scroll_3.CanvasPosition = Vector2.new(0,scroll_2.CanvasPosition.Y+infoFrame.AbsoluteSize.Y)
-	wait()
-	local user = game:HttpGet("https://users.roblox.com/v1/users/"..ID)
-	local json = HttpService:JSONDecode(user)
-	local date = json["created"]:sub(1,10)
-	local splitDates = string.split(date,"-")
-	info2.Text = string.gsub(info2.Text, "Loading...",splitDates[2].."/"..splitDates[3].."/"..splitDates[1])
+function CreateJoinLabel(player, userId)
+    if #scroll_3:GetChildren() >= 2546 then
+        scroll_3:ClearAllChildren()
+    end
+    local infoFrame = Instance.new("Frame")
+    local info1 = Instance.new("TextLabel")
+    local info2 = Instance.new("TextLabel")
+    local ImageLabel_3 = Instance.new("ImageLabel")
+    infoFrame.Name = randomString()
+    infoFrame.Parent = scroll_3
+    infoFrame.BackgroundColor3 = Color3.new(1, 1, 1)
+    infoFrame.BackgroundTransparency = 1
+    infoFrame.BorderColor3 = Color3.new(0.105882, 0.164706, 0.207843)
+    infoFrame.Size = UDim2.new(1, 0, 0, 50)
+    info1.Name = randomString()
+    info1.Parent = infoFrame
+    info1.BackgroundTransparency = 1
+    info1.BorderSizePixel = 0
+    info1.Position = UDim2.new(0, 45, 0, 0)
+    info1.Size = UDim2.new(0, 135, 1, 0)
+    info1.ZIndex = 10
+    info1.Font = Enum.Font.SourceSans
+    info1.FontSize = Enum.FontSize.Size14
+    info1.Text = "Username: " .. player.Name .. "\nJoined Server: " .. Time()
+    info1.TextColor3 = Color3.new(1, 1, 1)
+    info1.TextWrapped = true
+    info1.TextXAlignment = Enum.TextXAlignment.Left
+    info2.Name = randomString()
+    info2.Parent = infoFrame
+    info2.BackgroundTransparency = 1
+    info2.BorderSizePixel = 0
+    info2.Position = UDim2.new(0, 185, 0, 0)
+    info2.Size = UDim2.new(0, 140, 1, -5)
+    info2.ZIndex = 10
+    info2.Font = Enum.Font.SourceSans
+    info2.FontSize = Enum.FontSize.Size14
+    info2.Text = "User ID: " .. userId .. "\nAccount Age: " .. player.AccountAge .. "\nJoined Roblox: Loading..."
+    info2.TextColor3 = Color3.new(1, 1, 1)
+    info2.TextWrapped = true
+    info2.TextXAlignment = Enum.TextXAlignment.Left
+    info2.TextYAlignment = Enum.TextYAlignment.Center
+    ImageLabel_3.Parent = infoFrame
+    ImageLabel_3.BackgroundTransparency = 1
+    ImageLabel_3.BorderSizePixel = 0
+    ImageLabel_3.Size = UDim2.new(0, 45, 1, 0)
+    ImageLabel_3.Image = Players:GetUserThumbnailAsync(userId, Enum.ThumbnailType.AvatarThumbnail, Enum.ThumbnailSize.Size420x420)
+    scroll_3.CanvasSize = UDim2.new(0, 0, 0, listlayout.AbsoluteContentSize.Y)
+    scroll_3.CanvasPosition = Vector2.new(0, scroll_2.CanvasPosition.Y + infoFrame.AbsoluteSize.Y)
+    local date = os.date("!%Y-%m-%d", os.time() - (player.AccountAge * 86400))
+    local splitDates = string.split(date, "-")
+    info2.Text = string.gsub(info2.Text, "Loading...", splitDates[2] .. "/" .. splitDates[3] .. "/" .. splitDates[1])
 end
 
 IYMouse.KeyDown:Connect(function(Key)
@@ -4388,6 +4387,16 @@ end
 
 local canvasPos = Vector2.new(0,0)
 local topCommand = nil
+local function updateCommandCanvasSize(frame)
+	local scale = (Scale and Scale.Scale) or 1
+	if scale <= 0 then scale = 1 end
+	local contentY = cmdListLayout.AbsoluteContentSize.Y
+	local unscaledY = math.ceil(contentY / scale)
+	frame.CanvasSize = UDim2.new(0, 0, 0, math.max(0, unscaledY))
+end
+cmdListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	updateCommandCanvasSize(CMDsF)
+end)
 IndexContents = function(str,bool,cmdbar,Ianim)
 	CMDsF.CanvasPosition = Vector2.new(0,0)
 	local SizeY = 0
@@ -4421,7 +4430,7 @@ IndexContents = function(str,bool,cmdbar,Ianim)
 			end
 		end
 	end
-	frame.CanvasSize = UDim2.new(0,0,0,cmdListLayout.AbsoluteContentSize.Y)
+	updateCommandCanvasSize(frame)
 	if not Ianim then
 		if indexnum == 0 or string.find(str, " ") then
 			if not cmdbar then
@@ -4563,7 +4572,7 @@ CMDs[#CMDs + 1] = {NAME = 'antigameplaypaused', DESC = 'Clears the annoying box 
 CMDs[#CMDs + 1] = {NAME = 'unantigameplaypaused', DESC = 'Disables antigameplaypaused'}
 CMDs[#CMDs + 1] = {NAME = 'clientantikick / antikick (CLIENT)', DESC = 'Prevents localscripts from kicking you'}
 CMDs[#CMDs + 1] = {NAME = 'clientantiteleport / antiteleport (CLIENT)', DESC = 'Prevents localscripts from teleporting you'}
-CMDs[#CMDs + 1] = {NAME = 'allowrejoin / allowrj [true/false] (CLIENT)', DESC = 'Changes if antiteleport allows you to rejoin or not'}
+CMDs[#CMDs + 1] = {NAME = 'allowrejoin / allowrj (CLIENT)', DESC = 'Toggles if antiteleport allows you to rejoin or not'}
 CMDs[#CMDs + 1] = {NAME = 'cancelteleport / canceltp', DESC = 'Cancels teleports in progress'}
 CMDs[#CMDs + 1] = {NAME = 'volume / vol [0-10]', DESC = 'Adjusts your game volume on a scale of 0 to 10'}
 CMDs[#CMDs + 1] = {NAME = 'antilag / boostfps / lowgraphics', DESC = 'Lowers game quality to boost FPS'}
@@ -5049,14 +5058,17 @@ function respawn(plr)
 	if invisRunning then TurnVisible() end
     local char = plr.Character
     local hum = char:FindFirstChildWhichIsA("Humanoid")
-    if hum then hum:ChangeState(Enum.HumanoidStateType.Dead) end
-    char:ClearAllChildren()
-    local newChar = Instance.new("Model")
-    newChar.Parent = workspace
-    plr.Character = newChar
-    task.wait()
-    plr.Character = char
-    newChar:Destroy()
+	local archive = workspace.FallenPartsDestroyHeight
+	local camType = workspace.CurrentCamera.CameraType
+	workspace.CurrentCamera.CameraType = Enum.CameraType.Scriptable
+	workspace.FallenPartsDestroyHeight = 0/0
+    getRoot(char).Position = Vector3.yAxis * archive
+	task.wait(plr:GetNetworkPing())
+	workspace.FallenPartsDestroyHeight = archive
+	repeat task.wait() until not char.Parent or not hum.Parent or (hum and hum.Health <= 0)
+	if hum then
+		hum:SetStateEnabled(Enum.HumanoidStateType.Dead, true)
+	end
 end
 
 local refreshCmd = false
@@ -5099,7 +5111,7 @@ Clip = true
 spDelay = 0.1
 Players.LocalPlayer.CharacterAdded:Connect(function()
 	NOFLY()
-	Floating = false
+	floating = false
 
 	if not Clip then
 		execCmd('clip')
@@ -5159,31 +5171,33 @@ local historyCount = 0
 local split=" "
 local lastBreakTime = 0
 function execCmd(cmdStr,speaker,store)
-	cmdStr = cmdStr:gsub("%s+$","")
+	cmdStr = cmdStr:gsub("%s+$", "")
 	task.spawn(function()
 		local rawCmdStr = cmdStr
-		cmdStr = string.gsub(cmdStr,"\\\\","%%BackSlash%%")
-		local commandsToRun = splitString(cmdStr,"\\")
-		for i,v in pairs(commandsToRun) do
-			v = string.gsub(v,"%%BackSlash%%","\\")
-			local x,y,num = v:find("^(%d+)%^")
+		cmdStr = string.gsub(cmdStr, "\\\\", "%%BackSlash%%")
+
+		local commandsToRun = splitString(cmdStr, "\\")
+		for i, v in pairs(commandsToRun) do
+			v = string.gsub(v, "%%BackSlash%%", "\\")
+			local x, y, num = v:find("^(%d+)%^")
 			local cmdDelay = 0
 			local infTimes = false
+
 			if num then
-				v = v:sub(y+1)
-				local x,y,del = v:find("^([%d%.]+)%^")
+				v = v:sub(y + 1)
+				local x, y, del = v:find("^([%d%.]+)%^")
 				if del then
-					v = v:sub(y+1)
+					v = v:sub(y + 1)
 					cmdDelay = tonumber(del) or 0
 				end
 			else
-				local x,y = v:find("^inf%^")
+				local x, y = v:find("^inf%^")
 				if x then
 					infTimes = true
-					v = v:sub(y+1)
-					local x,y,del = v:find("^([%d%.]+)%^")
+					v = v:sub(y + 1)
+					local x, y, del = v:find("^([%d%.]+)%^")
 					if del then
-						v = v:sub(y+1)
+						v = v:sub(y + 1)
 						del = tonumber(del) or 1
 						cmdDelay = (del > 0 and del or 1)
 					else
@@ -5193,45 +5207,49 @@ function execCmd(cmdStr,speaker,store)
 			end
 			num = tonumber(num or 1)
 
-			if v:sub(1,1) == "!" then
-				local chunks = splitString(v:sub(2),split)
+			if v:sub(1, 1) == "!" then
+				local chunks = splitString(v:sub(2), split)
 				if chunks[1] and lastCmds[chunks[1]] then v = lastCmds[chunks[1]] end
 			end
 
-			local args = splitString(v,split)
+			local args = splitString(v, split)
 			local cmdName = args[1]
 			local cmd = findCmd(cmdName)
 			if cmd then
-				table.remove(args,1)
+				table.remove(args, 1)
 				cargs = args
 				if not speaker then speaker = Players.LocalPlayer end
+
 				if store then
 					if speaker == Players.LocalPlayer then
-						if cmdHistory[1] ~= rawCmdStr and rawCmdStr:sub(1,11) ~= 'lastcommand' and rawCmdStr:sub(1,7) ~= 'lastcmd' then
-							table.insert(cmdHistory,1,rawCmdStr)
+						if cmdHistory[1] ~= rawCmdStr and rawCmdStr:sub(1, 11) ~= "lastcommand" and rawCmdStr:sub(1, 7) ~= "lastcmd" then
+							table.insert(cmdHistory, 1, rawCmdStr)
 						end
 					end
 					if #cmdHistory > 30 then table.remove(cmdHistory) end
 
 					lastCmds[cmdName] = v
 				end
+
 				local cmdStartTime = tick()
 				if infTimes then
 					while lastBreakTime < cmdStartTime do
-						local success,err = pcall(cmd.FUNC,args, speaker)
+						local success, err = pcall(cmd.FUNC, args, speaker)
 						if not success and _G.IY_DEBUG then
 							warn("Command Error:", cmdName, err)
 						end
 						wait(cmdDelay)
 					end
 				else
-					for rep = 1,num do
+					for rep = 1, num do
 						if lastBreakTime > cmdStartTime then break end
-						local success,err = pcall(function()
-							cmd.FUNC(args, speaker)
-						end)
+						local success, err = pcall(cmd.FUNC, args, speaker)
 						if not success and _G.IY_DEBUG then
 							warn("Command Error:", cmdName, err)
+							notify("Command Error: " .. cmdName, "Check console")
+						end
+						if success and type(err) == "string" and not table.find(args, "nonotify") then
+							notify("Command: " .. cmdName, err)
 						end
 						if cmdDelay ~= 0 then wait(cmdDelay) end
 					end
@@ -5239,7 +5257,7 @@ function execCmd(cmdStr,speaker,store)
 			end
 		end
 	end)
-end	
+end
 
 function addcmd(name,alias,func,plgn)
 	cmds[#cmds+1]=
@@ -7434,83 +7452,87 @@ addcmd('cframeflyspeed',{'cflyspeed'},function(args, speaker)
 	end
 end)
 
-Floating = false
-floatName = randomString()
+floating = false
+local beganListener: RBXScriptConnection
+local endListener: RBXScriptConnection
+local floatingFunc: RBXScriptConnection
+
 addcmd('float', {'platform'},function(args, speaker)
-	Floating = true
 	local pchar = speaker.Character
+	floatName = randomString()
+	floating = true
+	
 	if pchar and not pchar:FindFirstChild(floatName) then
 		task.spawn(function()
-			local Float = Instance.new('Part')
-			Float.Name = floatName
-			Float.Parent = pchar
-			Float.Transparency = 1
-			Float.Size = Vector3.new(2,0.2,1.5)
-			Float.Anchored = true
-			local FloatValue = -3.1
-			Float.CFrame = getRoot(pchar).CFrame * CFrame.new(0,FloatValue,0)
-			notify('Float','Float Enabled (Q = down & E = up)')
-			qUp = IYMouse.KeyUp:Connect(function(KEY)
-				if KEY == 'q' then
-					FloatValue = FloatValue + 0.5
+			local floatPoint = -3.1
+			local floatPart = Instance.new('Part')
+			floatPart.Name = floatName
+			floatPart.Parent = pchar
+			floatPart.Transparency = 1
+			floatPart.Size = Vector3.new(2, 0.2, 1.5)
+			floatPart.Anchored = true
+			
+			notify('Float', 'Started floating (Q = down & E = up)')
+			
+			beganListener = UserInputService.InputBegan:Connect(function(key, processed)
+				if processed then return end
+
+				if key.KeyCode == Enum.KeyCode.Q then
+					floatPoint -= 0.5
+				end
+				if key.KeyCode == Enum.KeyCode.E then
+					floatPoint += 1.5
 				end
 			end)
-			eUp = IYMouse.KeyUp:Connect(function(KEY)
-				if KEY == 'e' then
-					FloatValue = FloatValue - 1.5
+			endListener = UserInputService.InputEnded:Connect(function(key, processed)
+				if processed then return end
+
+				if key.KeyCode == Enum.KeyCode.Q then
+					floatPoint += 0.5
+				end
+				if key.KeyCode == Enum.KeyCode.E then
+					floatPoint -= 1.5
 				end
 			end)
-			qDown = IYMouse.KeyDown:Connect(function(KEY)
-				if KEY == 'q' then
-					FloatValue = FloatValue - 0.5
-				end
-			end)
-			eDown = IYMouse.KeyDown:Connect(function(KEY)
-				if KEY == 'e' then
-					FloatValue = FloatValue + 1.5
-				end
-			end)
+			
 			floatDied = speaker.Character:FindFirstChildOfClass('Humanoid').Died:Connect(function()
-				FloatingFunc:Disconnect()
-				Float:Destroy()
-				qUp:Disconnect()
-				eUp:Disconnect()
-				qDown:Disconnect()
-				eDown:Disconnect()
+				floatingFunc:Disconnect()
+				floatPart:Destroy()
 				floatDied:Disconnect()
+				beganListener:Disconnect()
+				endListener:Disconnect()
+				floatName = nil
 			end)
-			local function FloatPadLoop()
+			local function floatPadLoop()
 				if pchar:FindFirstChild(floatName) and getRoot(pchar) then
-					Float.CFrame = getRoot(pchar).CFrame * CFrame.new(0,FloatValue,0)
+					floatPart.CFrame = getRoot(pchar).CFrame * CFrame.new(0, floatPoint, 0)
 				else
-					FloatingFunc:Disconnect()
-					Float:Destroy()
-					qUp:Disconnect()
-					eUp:Disconnect()
-					qDown:Disconnect()
-					eDown:Disconnect()
+					floatingFunc:Disconnect()
+					floatPart:Destroy()
 					floatDied:Disconnect()
+					beganListener:Disconnect()
+					endListener:Disconnect()
+					floatName = nil
 				end
 			end			
-			FloatingFunc = RunService.Heartbeat:Connect(FloatPadLoop)
+			floatingFunc = RunService.PreAnimation:Connect(floatPadLoop)
 		end)
 	end
 end)
 
 addcmd('unfloat',{'nofloat','unplatform','noplatform'},function(args, speaker)
-	Floating = false
+	floating = false
 	local pchar = speaker.Character
-	notify('Float','Float Disabled')
+	notify('Float', 'Stopped floating')
 	if pchar:FindFirstChild(floatName) then
 		pchar:FindFirstChild(floatName):Destroy()
 	end
 	if floatDied then
-		FloatingFunc:Disconnect()
-		qUp:Disconnect()
-		eUp:Disconnect()
-		qDown:Disconnect()
-		eDown:Disconnect()
+		floatingFunc:Disconnect()
 		floatDied:Disconnect()
+		beganListener:Disconnect()
+		endListener:Disconnect()
+		floatName = nil
 	end
 end)
 
@@ -7543,7 +7565,7 @@ addcmd('swim',{},function(args, speaker)
 		Humanoid:ChangeState(Enum.HumanoidStateType.Swimming)
 		swimbeat = RunService.Heartbeat:Connect(function()
 			pcall(function()
-				getRoot(speaker.Character).Humanoid.RootPart.Velocity = ((Humanoid.MoveDirection ~= Vector3.new() or UserInputService:IsKeyDown(Enum.KeyCode.Space)) and getRoot(speaker.Character).Humanoid.RootPart.Velocity or Vector3.new())
+				getRoot(speaker.Character).Velocity = ((Humanoid.MoveDirection ~= Vector3.new() or UserInputService:IsKeyDown(Enum.KeyCode.Space)) and getRoot(speaker.Character).Velocity or Vector3.new())
 			end)
 		end)
 		swimming = true
@@ -9192,23 +9214,22 @@ addcmd("partpath", {"partname"}, function(args, speaker)
 end)
 
 addcmd("antiafk", {"antiidle"}, function(args, speaker)
-	if getconnections then
-		for _, connection in pairs(getconnections(speaker.Idled)) do
-    		pcall(function()
-        		if connection.Disable then
-            		connection:Disable()
-        		elseif connection.Disconnect then
-            		connection:Disconnect()
-        		end
-    		end)
-		end
-	else
-		speaker.Idled:Connect(function()
-			Services.VirtualUser:CaptureController()
-			Services.VirtualUser:ClickButton2(Vector2.new())
-		end)
-	end
-	if not (args[1] and tostring(args[1]) == "nonotify") then notify("Anti Idle", "Anti idle is enabled") end
+    if getconnections then
+        for _, c in getconnections(speaker.Idled) do
+            pcall(function() c:Disable() end) -- supposed to "pause" it
+            pcall(function() c:Disconnect() end) -- supposed to disconnect it
+        end
+    end
+
+    pcall(function() antiAfkCon:Disconnect() end)
+    antiAfkCon = speaker.Idled:Connect(function()
+       	local VirtualInputManager = Instance.new("VirtualInputManager")
+        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+        VirtualInputManager:Destroy()
+    end)
+
+    if not (args[1] and tostring(args[1]) == "nonotify") then notify("Anti Idle", "Anti idle is enabled") end
 end)
 
 addcmd("datalimit", {}, function(args, speaker)
@@ -11187,7 +11208,7 @@ function getTorso(x)
 	return x:FindFirstChild("Torso") or x:FindFirstChild("UpperTorso") or x:FindFirstChild("LowerTorso") or x:FindFirstChild("HumanoidRootPart")
 end
 
-addcmd("bang", {}, function(args, speaker)
+addcmd("bang", {"crack"}, function(args, speaker)
 	execCmd("unbang")
 	wait()
 	local humanoid = speaker.Character:FindFirstChildWhichIsA("Humanoid")
@@ -11213,11 +11234,12 @@ addcmd("bang", {}, function(args, speaker)
 					getRoot(speaker.Character).CFrame = otherRoot.CFrame * bangOffet
 				end)
 			end)
+			break
 		end
 	end
 end)
 
-addcmd("unbang", {}, function(args, speaker)
+addcmd("unbang", {"uncrack"}, function(args, speaker)
 	if bangDied then
 		bangDied:Disconnect()
 		bang:Stop()
@@ -13644,7 +13666,7 @@ function hookCharEvents(plr,instant)
 			eventEditor.FireEvent("OnDied",plr.Name)
 
 			local killedBy = humanoid:FindFirstChild("creator")
-			if killedBy and killedBy.Value and killedBy.Value.Parent then
+			if killedBy and killedBy:IsA("ObjectValue") and killedBy.Value and killedBy.Value.Parent then
 				eventEditor.FireEvent("OnKilled",plr.Name,killedBy.Name)
 			end
 		end)
